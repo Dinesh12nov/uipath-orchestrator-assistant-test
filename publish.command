@@ -23,8 +23,8 @@ echo "-> Pushing to GitHub..."
 git push
 
 # ---- Verify the live site actually updates; auto-fix a stuck Pages build ----
-URL="https://dinesh12nov.github.io/uipath-orchestrator-assistant/index.html"
-REPO_SLUG="Dinesh12nov/uipath-orchestrator-assistant"
+URL="https://dinesh12nov.github.io/uipath-orchestrator-assistant-test/index.html"
+REPO_SLUG="Dinesh12nov/uipath-orchestrator-assistant-test"
 WANT=$(wc -c < index.html | tr -d ' ')
 
 live_size() { curl -sI "$URL" | awk 'tolower($1)=="content-length:"{gsub(/\r/,"");print $2}'; }
@@ -53,7 +53,7 @@ if [ "$ok" = "1" ]; then
 else
   echo "⚠️ Not confirmed live yet. Check again in a few minutes, or tell Claude. URL:"
 fi
-echo "   https://dinesh12nov.github.io/uipath-orchestrator-assistant/"
+echo "   https://dinesh12nov.github.io/uipath-orchestrator-assistant-test/"
 
 echo ""
 echo "Press any key to close this window..."
