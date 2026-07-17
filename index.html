@@ -603,8 +603,14 @@ function renderSidebar() {
   }).join('');
 }
 
-function versionSelectHtml(id) {
-  let opts = ALL_VERSIONS.map(v => '<option value="' + v + '">' + v + ' (' + VERSION_INFO[v].type + ', ' + VERSION_INFO[v].status + ')</option>').join('');
+function versionSelectHtml(id, options) {
+  options = options || {};
+  let versions = ALL_VERSIONS;
+  if (options.maxVersion) {
+    const idx = ALL_VERSIONS.indexOf(options.maxVersion);
+    versions = idx === -1 ? ALL_VERSIONS : ALL_VERSIONS.slice(0, idx);
+  }
+  let opts = versions.map(v => '<option value="' + v + '">' + v + ' (' + VERSION_INFO[v].type + ', ' + VERSION_INFO[v].status + ')</option>').join('');
   return '<select id="' + id + '"><option value="">Select a version&hellip;</option>' + opts +
     '<option value="__other__">Other / not listed&hellip;</option></select>' +
     '<input type="text" id="' + id + '_other" placeholder="Type the version&hellip;" style="display:none; margin-top:8px;">';
@@ -709,7 +715,8 @@ function showNode(nodeId) {
     '<div class="other-row-label">Or just describe it in your own words:</div>' +
     '<div class="other-row"><input type="text" id="otherTxt_' + nodeId + '" placeholder="e.g. customer\'s Orchestrator won\'t start after the upgrade&hellip;"><button class="other-send" id="otherGo_' + nodeId + '" title="Send">➤</button></div>';
   } else if (node.type === 'select') {
-    controls = '<div class="field-row">' + versionSelectHtml('sel_' + nodeId) + '<button class="go-btn" id="go_' + nodeId + '">Continue →</button></div>';
+    const selOpts = (nodeId === 'classicmodern_version') ? { maxVersion: '2023.10' } : {};
+    controls = '<div class="field-row">' + versionSelectHtml('sel_' + nodeId, selOpts) + '<button class="go-btn" id="go_' + nodeId + '">Continue →</button></div>';
   } else if (node.type === 'text') {
     controls = '<div class="field-row"><textarea id="txt_' + nodeId + '" placeholder="' + (node.placeholder || '') + '"></textarea><button class="go-btn" id="go_' + nodeId + '">Search →</button></div>';
   }
