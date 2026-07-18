@@ -80,14 +80,6 @@
   #freshness .fresh-dot { width: 7px; height: 7px; border-radius: 50%; background: #3ddc84; flex-shrink:0; box-shadow: 0 0 0 3px rgba(61,220,132,0.15); animation: pulseDot 2.2s ease-in-out infinite; }
   #freshness .fresh-icon { width: 13px; text-align:center; flex-shrink:0; font-size: 11px; }
   @keyframes pulseDot { 0%, 100% { box-shadow: 0 0 0 3px rgba(61,220,132,0.15); } 50% { box-shadow: 0 0 0 5px rgba(61,220,132,0.25); } }
-  #checkUpdatesBtn {
-    width: 100%; background: transparent; border: 1px solid rgba(255,255,255,0.22);
-    color: #cfd6e8; border-radius: 8px; padding: 8px; font-size: 11.5px; cursor: pointer; font-weight: 600;
-    transition: background 0.15s ease, border-color 0.15s ease;
-  }
-  #checkUpdatesBtn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.35); }
-  #checkUpdatesBtn:disabled { opacity: 0.6; cursor: default; }
-
   /* ---------- Main ---------- */
   #main { flex: 1; overflow-y: auto; padding: 36px 44px; display: flex; justify-content: center; }
   #mainInner { max-width: 760px; width: 100%; }
@@ -280,7 +272,6 @@
         <div class="fresh-row"><span class="fresh-icon">🕒</span><span id="updatedText">Updated —</span></div>
         <div class="fresh-row"><span class="fresh-dot"></span><span id="freshText">Last verified —</span></div>
       </div>
-      <button id="checkUpdatesBtn">ℹ️ How this stays current</button>
     </div>
   </div>
   <div id="main"><div id="mainInner"></div></div>
@@ -822,7 +813,6 @@ document.getElementById('restartBtn').addEventListener('click', restart);
 (function initFreshness() {
   const freshTextEl = document.getElementById('freshText');
   const updatedTextEl = document.getElementById('updatedText');
-  const btn = document.getElementById('checkUpdatesBtn');
   function formatFreshDate(iso) {
     const d = new Date(iso + 'T00:00:00');
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -835,16 +825,6 @@ document.getElementById('restartBtn').addEventListener('click', restart);
   }
   freshTextEl.textContent = 'Last verified ' + formatFreshDate(LAST_VERIFIED);
   if (updatedTextEl) updatedTextEl.textContent = 'Updated ' + formatUpdatedAt(LAST_UPDATED_AT);
-
-  btn.addEventListener('click', () => {
-    const orig = btn.textContent;
-    if (!CANONICAL_URL) {
-      btn.textContent = 'Manually distributed — ask whoever sent you this file for the latest copy';
-      setTimeout(() => { btn.textContent = orig; }, 4000);
-      return;
-    }
-    window.open(CANONICAL_URL, '_blank');
-  });
 })();
 
 /* ---------- decision tree ---------- */
