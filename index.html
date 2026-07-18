@@ -322,34 +322,62 @@ const VERSION_INFO = {
 const LTS_ORDER = ["2021.10","2022.4","2023.4","2023.10","2024.10"];
 
 const ERRORS = [
-  {error:"Database creation failed", cause:"SQL account lacks dbcreator", fix:"Grant dbcreator to the SQL login at server level.", source:"Standalone Install"},
-  {error:"HTTP Error 500.37", cause:"ASP.NET Core startup timeout, or .NET version mismatch after upgrade", fix:"Increase startupTimeLimit in web.config to 300, or install the correct .NET Hosting Bundle then IISRESET.", source:"Standalone Install/Upgrade"},
-  {error:"The MetadataAddress must use HTTPS", cause:"IIS HTTPS binding missing/cert mismatch, or SSL thumbprint reset during upgrade or URL change", fix:"Rebind the correct SSL cert in IIS and update the thumbprint in Identity\\appsettings.Production.json to match certlm.msc.", source:"Standalone Install/Upgrade, Cross-Scenario"},
-  {error:"Unable to connect to SQL", cause:"Wrong connection string or firewall", fix:"Verify SQL port 1433 is open; test with SSMS from the install server.", source:"Standalone Install"},
-  {error:"Install hangs at IIS config", cause:"IIS not fully installed", fix:"Run the PowerShell IIS install script, restart, then rerun the MSI.", source:"Standalone Install"},
-  {error:"Invalid issuer login error", cause:"PublicUrl changed or identity config mismatch", fix:"Run the Platform Configuration Tool with the correct URL.", source:"Standalone Upgrade"},
-  {error:"DB migration timeout", cause:"Large DB or slow SQL", fix:"Increase the SQL command timeout, or run the migration manually via script.", source:"Standalone Upgrade"},
-  {error:"Robots show Disconnected post-upgrade", cause:"Machine key changed or URL mismatch", fix:"Re-register robots with the new machine key from Orchestrator.", source:"Standalone Upgrade"},
-  {error:"Object reference not set on Webhooks", cause:"Webhooks config not updated after upgrade", fix:"Restore the Webhooks appsettings.Production.json from backup.", source:"Standalone Upgrade"},
-  {error:"Pod OOMKilled", cause:"Memory limit too low", fix:"Increase memory limits in cluster_config.json and re-apply.", source:"Automation Suite"},
-  {error:"ArgoCD sync loop", cause:"Self-heal fighting a manual patch", fix:"Disable self-heal before patching, re-enable after.", source:"Automation Suite"},
-  {error:"redisenterpriseclusters not found", cause:"Redis CRD deleted or missing", fix:"Force delete the REC, remove finalizers, re-enable self-heal, and trigger the recovery job.", source:"Automation Suite"},
-  {error:"Persistent Volume stuck Pending", cause:"StorageClass not set as default", fix:"kubectl patch storageclass <name> to set is-default-class=true.", source:"Automation Suite"},
-  {error:"Image pull ErrImagePull", cause:"Registry credentials expired", fix:"Update registry credentials in cluster_config.json and re-apply.", source:"Automation Suite"},
-  {error:"Robot shows Disconnected after reconnect", cause:"Machine Template not added to the target folder", fix:"Add the Machine Template to the target folder in cloud Orchestrator.", source:"Cloud Migration"},
-  {error:"An unattended robot has not been configured", cause:"Domain credentials not set in cloud", fix:"Set domain\\username + password under Tenant → Manage Access → Unattended.", source:"Cloud Migration"},
-  {error:"Asset not found errors in Robot", cause:"Asset not recreated in cloud", fix:"Recreate the missing asset in cloud and verify folder assignment.", source:"Cloud Migration"},
-  {error:"Package not found", cause:"Upload failed or wrong folder", fix:"Re-upload the package and check folder assignment.", source:"Cloud Migration"},
-  {error:"SSO login fails after migration", cause:"Redirect URI mismatch", fix:"Update the Reply URL in the Azure AD app registration to include the cloud URL.", source:"Cloud Migration"},
-  {error:"APPAP004E", cause:"CyberArk App ID not found or not authorized", fix:"Verify the Application ID in CyberArk; check IP restrictions.", source:"Credential Store — CyberArk"},
-  {error:"APPAP007E", cause:"CyberArk Safe not found or no access", fix:"Grant the UiPath App ID access to the Safe in CyberArk.", source:"Credential Store — CyberArk"},
-  {error:"APPAP008E", cause:"Account not found in Safe", fix:"Verify the account/object name matches exactly.", source:"Credential Store — CyberArk"},
-  {error:"Credential store connection failed", cause:"Network/firewall blocking Orchestrator to Vault", fix:"Check the firewall/network path from Orchestrator to the vault.", source:"Credential Store"},
-  {error:"Invalid credentials for credential store", cause:"Client Secret expired (Azure Key Vault) or token expired (HashiCorp Vault)", fix:"Rotate the client secret/token in the vault and update the credential store config.", source:"Credential Store"},
-  {error:"External name not found", cause:"Secret name mismatch", fix:"Check exact casing — case-sensitive for Azure Key Vault, case-insensitive for CyberArk.", source:"Credential Store"},
-  {error:"Permission denied on credential store", cause:"SPN/App lacks Set permission (Normal mode) or Safe access (CyberArk)", fix:"Grant Set permission (AKV) or Safe access (CyberArk) to the service principal/app.", source:"Credential Store"},
-  {error:"Auth or HTTPS error right after a URL or hostname change", cause:"PublicUrl in SQL or the SSL thumbprint wasn't updated after the URL change", fix:"Run: UPDATE dbo.Settings SET Value='https://new-url' WHERE Name='PublicUrl'. Then verify the SSL thumbprint in Identity\\appsettings.Production.json matches certlm.msc.", source:"Cross-Scenario Gotcha"},
-  {error:"IIS Application Pools not starting", cause:"Pools running under different service accounts or Load User Profile disabled", fix:"All UiPath pools must run under the same service account with Load User Profile = True.", source:"Cross-Scenario Gotcha"}
+  {error:"Database creation failed", cause:"SQL account lacks dbcreator", fix:"Grant dbcreator to the SQL login at server level.", source:"Standalone Install",
+    keywords:["sql account","dbcreator","cannot create database","db creation failed","install fails at database"]},
+  {error:"HTTP Error 500.37", cause:"ASP.NET Core startup timeout, or .NET version mismatch after upgrade", fix:"Increase startupTimeLimit in web.config to 300, or install the correct .NET Hosting Bundle then IISRESET.", source:"Standalone Install/Upgrade",
+    keywords:["500.37","startup timeout","dotnet mismatch","hosting bundle","site wont start","orchestrator wont start","app failed to start"]},
+  {error:"The MetadataAddress must use HTTPS", cause:"IIS HTTPS binding missing/cert mismatch, or SSL thumbprint reset during upgrade or URL change", fix:"Rebind the correct SSL cert in IIS and update the thumbprint in Identity\\appsettings.Production.json to match certlm.msc.", source:"Standalone Install/Upgrade, Cross-Scenario",
+    keywords:["metadataaddress","https binding missing","ssl cert mismatch","identity server error","certificate error login"]},
+  {error:"Unable to connect to SQL", cause:"Wrong connection string or firewall", fix:"Verify SQL port 1433 is open; test with SSMS from the install server.", source:"Standalone Install",
+    keywords:["sql connection failed","cannot connect to database","port 1433","firewall blocking sql","database unreachable"]},
+  {error:"Install hangs at IIS config", cause:"IIS not fully installed", fix:"Run the PowerShell IIS install script, restart, then rerun the MSI.", source:"Standalone Install",
+    keywords:["install stuck","installer hangs","iis roles missing","iis features not installed","setup frozen"]},
+  {error:"Invalid issuer login error", cause:"PublicUrl changed or identity config mismatch", fix:"Run the Platform Configuration Tool with the correct URL.", source:"Standalone Upgrade",
+    keywords:["invalid issuer","login fails after url change","identity mismatch","cant login after upgrade"]},
+  {error:"DB migration timeout", cause:"Large DB or slow SQL", fix:"Increase the SQL command timeout, or run the migration manually via script.", source:"Standalone Upgrade",
+    keywords:["migration timeout","upgrade stuck on database","database migration slow","upgrade hangs sql"]},
+  {error:"Robots show Disconnected post-upgrade", cause:"Machine key changed or URL mismatch", fix:"Re-register robots with the new machine key from Orchestrator.", source:"Standalone Upgrade",
+    keywords:["robots disconnected after upgrade","robot offline after upgrade","machine key changed","robots not connecting post upgrade"]},
+  {error:"Object reference not set on Webhooks", cause:"Webhooks config not updated after upgrade", fix:"Restore the Webhooks appsettings.Production.json from backup.", source:"Standalone Upgrade",
+    keywords:["webhooks broken after upgrade","null reference webhooks","object reference not set","webhook error"]},
+  {error:"Pod OOMKilled", cause:"Memory limit too low", fix:"Increase memory limits in cluster_config.json and re-apply.", source:"Automation Suite",
+    keywords:["oomkilled","pod crashing","out of memory kubernetes","container restarting","pod killed memory"]},
+  {error:"ArgoCD sync loop", cause:"Self-heal fighting a manual patch", fix:"Disable self-heal before patching, re-enable after.", source:"Automation Suite",
+    keywords:["argocd stuck","sync loop","self heal fighting patch","gitops wont sync","argocd out of sync"]},
+  {error:"redisenterpriseclusters not found", cause:"Redis CRD deleted or missing", fix:"Force delete the REC, remove finalizers, re-enable self-heal, and trigger the recovery job.", source:"Automation Suite",
+    keywords:["redis crd missing","redis cluster not found","rec deleted","redis probe failure","redis recovery"]},
+  {error:"Persistent Volume stuck Pending", cause:"StorageClass not set as default", fix:"kubectl patch storageclass <name> to set is-default-class=true.", source:"Automation Suite",
+    keywords:["pvc pending","persistent volume stuck","storageclass not default","pod stuck pending storage"]},
+  {error:"Image pull ErrImagePull", cause:"Registry credentials expired", fix:"Update registry credentials in cluster_config.json and re-apply.", source:"Automation Suite",
+    keywords:["errimagepull","image pull backoff","registry auth expired","docker pull failed","cant pull image"]},
+  {error:"Robot shows Disconnected after reconnect", cause:"Machine Template not added to the target folder", fix:"Add the Machine Template to the target folder in cloud Orchestrator.", source:"Cloud Migration",
+    keywords:["robot disconnected after migration to cloud","machine template missing","robot wont connect after migration","robots offline in cloud"]},
+  {error:"An unattended robot has not been configured", cause:"Domain credentials not set in cloud", fix:"Set domain\\username + password under Tenant → Manage Access → Unattended.", source:"Cloud Migration",
+    keywords:["unattended robot not configured","domain credentials missing cloud","unattended automation fails","unattended job wont run"]},
+  {error:"Asset not found errors in Robot", cause:"Asset not recreated in cloud", fix:"Recreate the missing asset in cloud and verify folder assignment.", source:"Cloud Migration",
+    keywords:["asset not found","missing asset after migration","asset error cloud","asset missing folder"]},
+  {error:"Package not found", cause:"Upload failed or wrong folder", fix:"Re-upload the package and check folder assignment.", source:"Cloud Migration",
+    keywords:["package not found","process missing after migration","package upload failed","cant find package orchestrator"]},
+  {error:"SSO login fails after migration", cause:"Redirect URI mismatch", fix:"Update the Reply URL in the Azure AD app registration to include the cloud URL.", source:"Cloud Migration",
+    keywords:["sso broken after migration","azure ad login error","redirect uri mismatch","saml login fails","cant login after migration"]},
+  {error:"APPAP004E", cause:"CyberArk App ID not found or not authorized", fix:"Verify the Application ID in CyberArk; check IP restrictions.", source:"Credential Store — CyberArk",
+    keywords:["appap004e","cyberark app id error","ccp not authorized","cyberark app id not found"]},
+  {error:"APPAP007E", cause:"CyberArk Safe not found or no access", fix:"Grant the UiPath App ID access to the Safe in CyberArk.", source:"Credential Store — CyberArk",
+    keywords:["appap007e","cyberark safe not found","no access to safe","ccp safe error"]},
+  {error:"APPAP008E", cause:"Account not found in Safe", fix:"Verify the account/object name matches exactly.", source:"Credential Store — CyberArk",
+    keywords:["appap008e","account not found safe","cyberark account missing","object name mismatch"]},
+  {error:"Credential store connection failed", cause:"Network/firewall blocking Orchestrator to Vault", fix:"Check the firewall/network path from Orchestrator to the vault.", source:"Credential Store",
+    keywords:["credential store unreachable","cannot reach vault","vault connection failed","credential store timeout","network blocking vault"]},
+  {error:"Invalid credentials for credential store", cause:"Client Secret expired (Azure Key Vault) or token expired (HashiCorp Vault)", fix:"Rotate the client secret/token in the vault and update the credential store config.", source:"Credential Store",
+    keywords:["invalid credentials vault","client secret expired","token expired credential store","akv auth error","hashicorp token expired"]},
+  {error:"External name not found", cause:"Secret name mismatch", fix:"Check exact casing — case-sensitive for Azure Key Vault, case-insensitive for CyberArk.", source:"Credential Store",
+    keywords:["external name not found","secret name mismatch","asset mapping wrong","cant find secret vault"]},
+  {error:"Permission denied on credential store", cause:"SPN/App lacks Set permission (Normal mode) or Safe access (CyberArk)", fix:"Grant Set permission (AKV) or Safe access (CyberArk) to the service principal/app.", source:"Credential Store",
+    keywords:["permission denied vault","set permission missing","safe access denied","spn lacks permission","forbidden credential store"]},
+  {error:"Auth or HTTPS error right after a URL or hostname change", cause:"PublicUrl in SQL or the SSL thumbprint wasn't updated after the URL change", fix:"Run: UPDATE dbo.Settings SET Value='https://new-url' WHERE Name='PublicUrl'. Then verify the SSL thumbprint in Identity\\appsettings.Production.json matches certlm.msc.", source:"Cross-Scenario Gotcha",
+    keywords:["url changed broke login","hostname change error","publicurl not updated","ssl thumbprint mismatch","broke after changing url"]},
+  {error:"IIS Application Pools not starting", cause:"Pools running under different service accounts or Load User Profile disabled", fix:"All UiPath pools must run under the same service account with Load User Profile = True.", source:"Cross-Scenario Gotcha",
+    keywords:["app pool wont start","load user profile disabled","iis pool crashing","application pool stopped"]}
 ];
 
 const GOTCHAS = [
@@ -679,7 +707,6 @@ function scopeChips(bits) {
 function actionBar() {
   return '<div class="action-bar">' +
     '<button class="action-btn primary" id="copyBtn">📋 Copy checklist</button>' +
-    '<button class="action-btn" id="printBtn">🖨️ Print</button>' +
     '<button class="action-btn" id="newCaseBtn">⟲ New case</button>' +
     '</div>';
 }
@@ -690,7 +717,6 @@ function wireActionBar(resultEl) {
       const old = b.textContent; b.textContent = '✅ Copied'; setTimeout(() => b.textContent = old, 1500);
     });
   });
-  document.getElementById('printBtn').addEventListener('click', () => window.print());
   document.getElementById('newCaseBtn').addEventListener('click', restart);
 }
 
@@ -993,13 +1019,36 @@ const TREE = {
   TERM_TROUBLESHOOT: { terminal: true, render: (a) => {
     const q = (a.errorText || '').toLowerCase();
     const tokens = q.split(/[^a-z0-9]+/).filter(t => t.length > 2);
+    // Crude singular/plural tolerance: also try the token with a trailing 's' stripped/added.
+    function stemVariants(t) {
+      const variants = [t];
+      if (t.endsWith('s') && t.length > 3) variants.push(t.slice(0, -1));
+      else variants.push(t + 's');
+      return variants;
+    }
+    function fieldHasToken(fieldLower, t) {
+      return stemVariants(t).some(v => fieldLower.indexOf(v) !== -1);
+    }
     const scored = ERRORS.map(e => {
       const errLower = e.error.toLowerCase();
+      const causeLower = (e.cause || '').toLowerCase();
+      const fixLower = (e.fix || '').toLowerCase();
+      const sourceLower = (e.source || '').toLowerCase();
+      const keywordsLower = (e.keywords || []).map(k => k.toLowerCase());
       let score = 0;
-      if (q.indexOf(errLower) !== -1 || errLower.indexOf(q) !== -1) score += 5;
-      tokens.forEach(t => { if (errLower.indexOf(t) !== -1) score += 1; });
+      // Whole-phrase match against the curated title is the strongest signal.
+      if (q.indexOf(errLower) !== -1 || errLower.indexOf(q) !== -1) score += 8;
+      // Whole-phrase match against any keyword phrase is nearly as strong.
+      keywordsLower.forEach(k => { if (q.indexOf(k) !== -1 || k.indexOf(q) !== -1) score += 6; });
+      tokens.forEach(t => {
+        if (fieldHasToken(errLower, t)) score += 3;
+        else if (keywordsLower.some(k => fieldHasToken(k, t))) score += 3;
+        else if (fieldHasToken(causeLower, t)) score += 2;
+        else if (fieldHasToken(fixLower, t)) score += 1;
+        if (fieldHasToken(sourceLower, t)) score += 1;
+      });
       return { e, score };
-    }).filter(x => x.score > 0).sort((x, y) => y.score - x.score).slice(0, 5);
+    }).filter(x => x.score >= 5).sort((x, y) => y.score - x.score).slice(0, 5);
 
     let body = '';
     if (scored.length) {
