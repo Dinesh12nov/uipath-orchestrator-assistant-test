@@ -182,6 +182,8 @@
 
   .warn { background: #fff3ec; border: 1px solid #ffd7bd; color: #8a3a12; padding: 10px 13px; border-radius: 9px; font-size: 13px; margin-bottom: 14px; }
 
+  .field-error { background: #fdeceb; border: 1px solid #f5b8b3; color: #9a2c22; padding: 10px 13px; border-radius: 9px; font-size: 13px; margin-top: 10px; }
+
   .action-bar { display: flex; gap: 8px; margin-bottom: 20px; }
   .action-btn {
     background: var(--card); border: 1.5px solid var(--border); color: var(--navy); border-radius: 8px;
@@ -293,7 +295,7 @@ const MD = {
 const LAST_VERIFIED = "2026-07-20";
 // LAST_UPDATED_AT is bumped whenever the page's content or design is actually edited/published —
 // distinct from LAST_VERIFIED, which only tracks the daily freshness check.
-const LAST_UPDATED_AT = "2026-07-20T15:17:49";
+const LAST_UPDATED_AT = "2026-07-20T16:36:25";
 // Distribution for this wizard is intentionally manual (no shared-drive connector) — each PSE
 // keeps their own copy of this file, refreshed whenever the owner re-shares it after a daily
 // verification pass. CANONICAL_URL is left blank on purpose; if that ever changes, fill it in
@@ -629,6 +631,11 @@ function versionSelectHtml(id, options) {
     const idx = ALL_VERSIONS.indexOf(options.maxVersion);
     versions = idx === -1 ? ALL_VERSIONS : ALL_VERSIONS.slice(0, idx);
   }
+  if (options.minVersion) {
+    const idx = ALL_VERSIONS.indexOf(options.minVersion);
+    // Strictly AFTER minVersion — an upgrade target must be newer than the current version, not equal to it.
+    versions = idx === -1 ? versions : versions.slice(idx + 1);
+  }
   let opts = versions.map(v => '<option value="' + v + '">' + v + ' (' + VERSION_INFO[v].type + ', ' + VERSION_INFO[v].status + ')</option>').join('');
   return '<select id="' + id + '"><option value="">Select a version&hellip;</option>' + opts +
     '<option value="__other__">Other / not listed&hellip;</option></select>' +
@@ -647,6 +654,18 @@ function matchOptionFuzzy(options, text) {
     if (score > bestScore) { bestScore = score; best = opt; }
   });
   return bestScore > 0 ? best : null;
+}
+
+function versionOrderIssue(current, target) {
+  if (!current || !target) return null; // current not yet answered (e.g. first render) — nothing to validate against
+  if (current === target) {
+    return 'Target version is the same as the current version (' + current + ') — that’s not an upgrade. Pick a version newer than ' + current + ', or use Troubleshooting if this isn’t actually an upgrade scenario.';
+  }
+  const ci = ALL_VERSIONS.indexOf(current), ti = ALL_VERSIONS.indexOf(target);
+  if (ci !== -1 && ti !== -1 && ti < ci) {
+    return 'Target version (' + target + ') is older than the current version (' + current + ') — that’s a downgrade, which isn’t a supported upgrade path. Double-check which version is current and which is the target, then try again.';
+  }
+  return null;
 }
 
 function ltsSkipWarning(current, target) {
@@ -744,8 +763,10 @@ function showNode(nodeId) {
     '<div class="other-row-label">Or just describe it in your own words:</div>' +
     '<div class="other-row"><input type="text" id="otherTxt_' + nodeId + '" placeholder="e.g. customer\'s Orchestrator won\'t start after the upgrade&hellip;"><button class="other-send" id="otherGo_' + nodeId + '" title="Send">➤</button></div>';
   } else if (node.type === 'select') {
-    const selOpts = (nodeId === 'classicmodern_version') ? { maxVersion: '2023.4' } : {};
-    controls = '<div class="field-row">' + versionSelectHtml('sel_' + nodeId, selOpts) + '<button class="go-btn" id="go_' + nodeId + '">Continue →</button></div>';
+    let selOpts = {};
+    if (nodeId === 'classicmodern_version') selOpts = { maxVersion: '2023.4' };
+    else if ((nodeId === 'upgrade_standalone_target' || nodeId === 'upgrade_as_target') && answers.currentVersion) selOpts = { minVersion: answers.currentVersion };
+    controls = '<div class="field-row">' + versionSelectHtml('sel_' + nodeId, selOpts) + '<button class="go-btn" id="go_' + nodeId + '">Continue →</button></div><div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
   } else if (node.type === 'text') {
     controls = '<div class="field-row"><textarea id="txt_' + nodeId + '" placeholder="' + (node.placeholder || '') + '"></textarea><button class="go-btn" id="go_' + nodeId + '">Search →</button></div>';
   }
@@ -790,6 +811,15 @@ function showNode(nodeId) {
       let val = selEl.value;
       if (!val) return;
       if (val === '__other__') { val = otherInput.value.trim(); if (!val) return; }
+      const errEl = document.getElementById('err_' + nodeId);
+      if (typeof node.validate === 'function') {
+        const errMsg = node.validate(val, answers);
+        if (errMsg) {
+          if (errEl) { errEl.textContent = '⚠️ ' + errMsg; errEl.style.display = 'block'; }
+          return; // do not advance, do not log — let the customer correct the selection
+        }
+      }
+      if (errEl) errEl.style.display = 'none';
       answers[node.answerKey] = val;
       progressLog.push({ q: node.shortQ || node.question, a: val });
       renderSidebar();
@@ -886,9 +916,9 @@ const TREE = {
     options: [ { label: "Standalone", next: 'upgrade_standalone_current' }, { label: "Automation Suite", next: 'upgrade_as_current' } ]
   },
   upgrade_as_current: { question: "Current Automation Suite version (exact)?", shortQ: "Current version", type: 'select', answerKey: 'currentVersion', next: 'upgrade_as_target' },
-  upgrade_as_target: { question: "Target Automation Suite version?", shortQ: "Target version", type: 'select', answerKey: 'targetVersion', next: 'TERM_AS_UPGRADE' },
+  upgrade_as_target: { question: "Target Automation Suite version?", shortQ: "Target version", type: 'select', answerKey: 'targetVersion', next: 'TERM_AS_UPGRADE', validate: (val, a) => versionOrderIssue(a.currentVersion, val) },
   upgrade_standalone_current: { question: "Current version (exact)?", shortQ: "Current version", type: 'select', answerKey: 'currentVersion', next: 'upgrade_standalone_target' },
-  upgrade_standalone_target: { question: "Target version?", shortQ: "Target version", type: 'select', answerKey: 'targetVersion', next: 'upgrade_standalone_mode' },
+  upgrade_standalone_target: { question: "Target version?", shortQ: "Target version", type: 'select', answerKey: 'targetVersion', next: 'upgrade_standalone_mode', validate: (val, a) => versionOrderIssue(a.currentVersion, val) },
   upgrade_standalone_mode: {
     question: "In-place (same server) or side-by-side (new server)?", shortQ: "Upgrade mode", type: 'choice', answerKey: 'mode',
     options: [ { label: "In-place", next: 'TERM_STANDALONE_UPGRADE' }, { label: "Side-by-side", next: 'TERM_STANDALONE_UPGRADE' } ]
