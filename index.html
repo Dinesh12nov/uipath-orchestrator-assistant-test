@@ -293,7 +293,7 @@ const MD = {
 const LAST_VERIFIED = "2026-07-20";
 // LAST_UPDATED_AT is bumped whenever the page's content or design is actually edited/published —
 // distinct from LAST_VERIFIED, which only tracks the daily freshness check.
-const LAST_UPDATED_AT = "2026-07-20T09:19:13";
+const LAST_UPDATED_AT = "2026-07-20T15:17:49";
 // Distribution for this wizard is intentionally manual (no shared-drive connector) — each PSE
 // keeps their own copy of this file, refreshed whenever the owner re-shares it after a daily
 // verification pass. CANONICAL_URL is left blank on purpose; if that ever changes, fill it in
@@ -1006,7 +1006,7 @@ const TREE = {
       warn += '<div class="warn">⚠️ Current version is pre-2023.10 &mdash; if this migration is happening ahead of an upgrade, sequence it as: migrate/delete classic folders first, then upgrade. 2023.10+ setup will block on remaining classic objects otherwise.</div>';
     }
     return '<div class="result-card"><div class="result-header"><span class="ic">🗂️</span><h2>Classic → Modern Folder Migration</h2></div>' +
-      scopeChips([a.currentVersion, a.robotCount]) + warn + actionBar() + renderFileBlock(MD.classicmodern) + '</div>';
+      scopeChips([a.currentVersion, a.robotCount]) + warn + actionBar() + renderFileBlock(MD.folders) + '</div>';
   }},
   TERM_TROUBLESHOOT: { terminal: true, render: (a) => {
     const q = (a.errorText || '').toLowerCase();
