@@ -300,7 +300,7 @@ const MD = {
 const LAST_VERIFIED = "2026-07-22";
 // LAST_UPDATED_AT is bumped whenever the page's content or design is actually edited/published —
 // distinct from LAST_VERIFIED, which only tracks the daily freshness check.
-const LAST_UPDATED_AT = "2026-07-22T09:30:30";
+const LAST_UPDATED_AT = "2026-07-22T10:12:42";
 // Distribution for this wizard is intentionally manual (no shared-drive connector) — each PSE
 // keeps their own copy of this file, refreshed whenever the owner re-shares it after a daily
 // verification pass. CANONICAL_URL is left blank on purpose; if that ever changes, fill it in
@@ -641,9 +641,13 @@ function versionSelectHtml(id, options) {
     // Strictly AFTER minVersion — an upgrade target must be newer than the current version, not equal to it.
     versions = idx === -1 ? versions : versions.slice(idx + 1);
   }
-  let olderOpt = options.includeOlder ? '<option value="pre-2021.10">2021.10 or older</option>' : '';
-  let opts = versions.map(v => '<option value="' + v + '">' + v + ' (' + VERSION_INFO[v].status + ')</option>').join('');
-  return '<select id="' + id + '"><option value="">Select a version&hellip;</option>' + olderOpt + opts +
+  // includeOlder merges into a single "<oldest> or older" entry instead of showing both
+  // "<oldest> or older" and the plain "<oldest>" version as two separate, confusing options.
+  let opts = versions.map((v, i) => {
+    const label = (options.includeOlder && i === 0) ? (v + ' or older') : (v + ' (' + VERSION_INFO[v].status + ')');
+    return '<option value="' + v + '">' + label + '</option>';
+  }).join('');
+  return '<select id="' + id + '"><option value="">Select a version&hellip;</option>' + opts +
     '<option value="__other__">Other / not listed&hellip;</option></select>' +
     '<input type="text" id="' + id + '_other" placeholder="Type the version&hellip;" style="display:none; margin-top:8px;">';
 }
@@ -717,10 +721,6 @@ function classicFolderUpgradeWarning(currentVersion, targetVersion) {
     // Current version is already 2023.10+, which means Classic folders cannot exist here —
     // they would have had to be migrated already just to reach this version. Nothing to warn about.
     return null;
-  }
-
-  if (currentVersion === 'pre-2021.10') {
-    return 'Current version is <strong>2021.10 or older</strong> and target is <strong>' + targetVersion + '</strong> &mdash; Orchestrator 2023.10+ blocks setup outright if any Classic folders/robots remain in the database. Confirm they have been migrated to Modern folders (and the classic folders deleted) <strong>before</strong> running this upgrade. If not done yet, run the Classic&rarr;Modern migration path first.';
   }
 
   if (currentIdx === -1) {
@@ -1315,9 +1315,9 @@ const TREE = {
   TERM_MIGRATION: { terminal: true, render: (a) => {
     let warn = '';
     const curIdx = ALL_VERSIONS.indexOf(a.currentVersion);
-    const isPreClassicCutoff = a.currentVersion === 'pre-2021.10' || (curIdx !== -1 && curIdx < ALL_VERSIONS.indexOf('2023.4'));
+    const isPreClassicCutoff = curIdx !== -1 && curIdx < ALL_VERSIONS.indexOf('2023.4');
     if (isPreClassicCutoff) {
-      warn = '<div class="warn">⚠️ Current version is pre-2023.4' + (a.currentVersion === 'pre-2021.10' ? '' : ' (' + a.currentVersion + ')') + ' &mdash; if any Classic folders/robots still exist, Classic folders are not supported in Automation Cloud at all, and Orchestrator 2023.10+ blocks setup outright if Classic objects remain. If this migration is happening ahead of an on-prem upgrade, sequence it as: migrate/delete Classic folders first (Classic&rarr;Modern migration path), <strong>then</strong> upgrade &mdash; 2023.10+ setup will block on remaining classic objects otherwise.</div>';
+      warn = '<div class="warn">⚠️ Current version is pre-2023.4 (' + a.currentVersion + ') &mdash; if any Classic folders/robots still exist, Classic folders are not supported in Automation Cloud at all, and Orchestrator 2023.10+ blocks setup outright if Classic objects remain. If this migration is happening ahead of an on-prem upgrade, sequence it as: migrate/delete Classic folders first (Classic&rarr;Modern migration path), <strong>then</strong> upgrade &mdash; 2023.10+ setup will block on remaining classic objects otherwise.</div>';
     }
     let out = '<div class="result-card"><div class="result-header"><span class="ic">☁️</span><h2>Standalone → Automation Cloud Migration</h2></div>' +
       scopeChips([a.currentVersion, 'preserve data: ' + a.preserveData, 'custom configs: ' + a.customConfigs, 'SSO: ' + a.sso, 'credential stores: ' + a.credsUsed]) +
