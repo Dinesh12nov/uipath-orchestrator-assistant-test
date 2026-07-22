@@ -300,7 +300,7 @@ const MD = {
 const LAST_VERIFIED = "2026-07-22";
 // LAST_UPDATED_AT is bumped whenever the page's content or design is actually edited/published —
 // distinct from LAST_VERIFIED, which only tracks the daily freshness check.
-const LAST_UPDATED_AT = "2026-07-22T08:51:01";
+const LAST_UPDATED_AT = "2026-07-22T09:30:30";
 // Distribution for this wizard is intentionally manual (no shared-drive connector) — each PSE
 // keeps their own copy of this file, refreshed whenever the owner re-shares it after a daily
 // verification pass. CANONICAL_URL is left blank on purpose; if that ever changes, fill it in
@@ -648,6 +648,29 @@ function versionSelectHtml(id, options) {
     '<input type="text" id="' + id + '_other" placeholder="Type the version&hellip;" style="display:none; margin-top:8px;">';
 }
 
+// ---- Reusable combo-page field builders (used by *-combo node types, which put several
+// questions from what used to be a multi-step chain onto a single page for faster PSE use) ----
+function comboCardsField(label, gridId, options) {
+  // options: array of plain label strings, or {label, value} objects (value defaults to label)
+  const norm = options.map(o => typeof o === 'string' ? { label: o, value: o } : o);
+  return '<div class="field-row"><div class="other-row-label">' + label + '</div>' +
+    '<div class="opt-grid" id="' + gridId + '">' +
+      norm.map(o => '<div class="opt-card" data-val="' + escapeHtml(o.value) + '"><span class="ic-badge">' + iconForLabel(o.label) + '</span><span class="opt-label">' + escapeHtml(o.label) + '</span></div>').join('') +
+    '</div></div>';
+}
+function wireCardsField(gridId) {
+  const cards = Array.from(mainInner.querySelectorAll('#' + gridId + ' .opt-card'));
+  const state = { value: null };
+  cards.forEach(card => {
+    card.addEventListener('click', () => {
+      state.value = card.getAttribute('data-val');
+      cards.forEach(c => c.classList.toggle('selected', c === card));
+      if (state.onChange) state.onChange(state.value);
+    });
+  });
+  return state;
+}
+
 function matchOptionFuzzy(options, text) {
   const q = text.toLowerCase();
   const tokens = q.split(/[^a-z0-9]+/).filter(t => t.length > 2);
@@ -780,7 +803,6 @@ function showNode(nodeId) {
     '<div class="other-row"><input type="text" id="otherTxt_' + nodeId + '" placeholder="e.g. customer\'s Orchestrator won\'t start after the upgrade&hellip;"><button class="other-send" id="otherGo_' + nodeId + '" title="Send">➤</button></div>';
   } else if (node.type === 'select') {
     let selOpts = {};
-    if (nodeId === 'classicmodern_version') selOpts = { maxVersion: '2023.4' };
     if (node.answerKey === 'currentVersion') selOpts.includeOlder = true;
     controls = '<div class="field-row">' + versionSelectHtml('sel_' + nodeId, selOpts) + '<button class="go-btn" id="go_' + nodeId + '">Continue →</button></div><div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
   } else if (node.type === 'text') {
@@ -803,6 +825,50 @@ function showNode(nodeId) {
           '<div class="opt-card" data-mode="In-place"><span class="ic-badge">' + iconForLabel('In-place') + '</span><span class="opt-label">In-place</span></div>' +
           '<div class="opt-card" data-mode="Side-by-side"><span class="ic-badge">' + iconForLabel('Side-by-side') + '</span><span class="opt-label">Side-by-side</span></div>' +
         '</div></div>' +
+      '<button class="go-btn" id="go_' + nodeId + '">Continue →</button>' +
+      '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
+  } else if (node.type === 'install-combo') {
+    controls = '<div class="field-row"><div class="other-row-label">Deployment type</div>' +
+      '<div class="opt-grid" id="depGrid_' + nodeId + '">' +
+        '<div class="opt-card" data-dep="Standalone"><span class="ic-badge">' + iconForLabel('Standalone') + '</span><span class="opt-label">Standalone</span></div>' +
+        '<div class="opt-card" data-dep="Automation Suite"><span class="ic-badge">' + iconForLabel('Automation Suite') + '</span><span class="opt-label">Automation Suite</span></div>' +
+      '</div></div>' +
+      '<div id="saFields_' + nodeId + '" style="display:none;">' +
+        '<div class="field-row"><div class="other-row-label">Target version</div>' + versionSelectHtml('sel_' + nodeId + '_sa_version', {}) + '</div>' +
+        comboCardsField('Single-node or multi-node/HA?', 'topoGrid_' + nodeId, ['Single-node', 'Multi-node / HA']) +
+      '</div>' +
+      '<div id="asFields_' + nodeId + '" style="display:none;">' +
+        comboCardsField('Platform (AKS/EKS/OpenShift/on-prem K8s use uipathctl + input.json; GCP is a separate self-managed RKE2 installer)', 'platGrid_' + nodeId,
+          ['AKS (Azure)', 'EKS (AWS)', 'OpenShift', 'On-prem / existing Kubernetes', 'GCP (self-managed Linux/RKE2 installer)']) +
+        comboCardsField('input.json profile', 'profGrid_' + nodeId, ['ha (production, high availability)', 'Other / not sure — verify against input.json']) +
+        '<div class="field-row"><div class="other-row-label">Target version</div>' + versionSelectHtml('sel_' + nodeId + '_as_version', {}) + '</div>' +
+        comboCardsField('Air-gapped (no outbound internet)?', 'airGrid_' + nodeId, ['Yes, air-gapped', 'No, has internet access']) +
+      '</div>' +
+      '<button class="go-btn" id="go_' + nodeId + '">Continue →</button>' +
+      '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
+  } else if (node.type === 'migration-combo') {
+    controls = '<div class="field-row"><div class="other-row-label">Current Standalone version</div>' + versionSelectHtml('sel_' + nodeId + '_current', { includeOlder: true }) + '</div>' +
+      comboCardsField('Do you need to preserve historical job/queue data?', 'preserveGrid_' + nodeId, ['Yes', 'No']) +
+      comboCardsField('Custom Orchestrator configurations in use?', 'configsGrid_' + nodeId, ['Yes', 'No']) +
+      comboCardsField('Using Standalone Identity / SSO (AD, SAML)?', 'ssoGrid_' + nodeId, ['Yes', 'No']) +
+      comboCardsField('Using credential stores (CyberArk, Azure Key Vault, etc.)?', 'credsGrid_' + nodeId, ['Yes', 'No']) +
+      '<button class="go-btn" id="go_' + nodeId + '">Continue →</button>' +
+      '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
+  } else if (node.type === 'onboard-combo') {
+    controls = comboCardsField('New tenant onboarding, credential store setup, or both?', 'kindGrid_' + nodeId,
+        [{ label: 'New tenant only', value: 'tenant' }, { label: 'Credential store only', value: 'store' }, { label: 'Both', value: 'both' }]) +
+      '<div class="field-row" id="storeRow_' + nodeId + '" style="display:none;"><div class="other-row-label">Which credential store?</div>' +
+        '<div class="opt-grid" id="storeGrid_' + nodeId + '">' +
+          '<div class="opt-card" data-val="Azure Key Vault"><span class="ic-badge">' + iconForLabel('Azure Key Vault') + '</span><span class="opt-label">Azure Key Vault</span></div>' +
+          '<div class="opt-card" data-val="CyberArk CCP"><span class="ic-badge">' + iconForLabel('CyberArk') + '</span><span class="opt-label">CyberArk CCP</span></div>' +
+          '<div class="opt-card" data-val="HashiCorp Vault"><span class="ic-badge">' + iconForLabel('HashiCorp') + '</span><span class="opt-label">HashiCorp Vault</span></div>' +
+          '<div class="opt-card" data-val="BeyondTrust"><span class="ic-badge">' + iconForLabel('BeyondTrust') + '</span><span class="opt-label">BeyondTrust</span></div>' +
+        '</div></div>' +
+      '<button class="go-btn" id="go_' + nodeId + '">Continue →</button>' +
+      '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
+  } else if (node.type === 'classicmodern-combo') {
+    controls = '<div class="field-row"><div class="other-row-label">Current Orchestrator version</div>' + versionSelectHtml('sel_' + nodeId + '_current', { includeOlder: true, maxVersion: '2023.4' }) + '</div>' +
+      comboCardsField('Roughly how many classic robots are in scope?', 'countGrid_' + nodeId, ['Under 500', '500 – 2,000', 'Over 2,000 (wizard not recommended)']) +
       '<button class="go-btn" id="go_' + nodeId + '">Continue →</button>' +
       '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
   }
@@ -981,6 +1047,165 @@ function showNode(nodeId) {
 
       advance(node, selectedDep === 'Standalone' ? 'TERM_STANDALONE_UPGRADE' : 'TERM_AS_UPGRADE');
     });
+  } else if (node.type === 'install-combo') {
+    const depCards = Array.from(mainInner.querySelectorAll('#depGrid_' + nodeId + ' .opt-card'));
+    const saFields = document.getElementById('saFields_' + nodeId);
+    const asFields = document.getElementById('asFields_' + nodeId);
+    const topo = wireCardsField('topoGrid_' + nodeId);
+    const plat = wireCardsField('platGrid_' + nodeId);
+    const prof = wireCardsField('profGrid_' + nodeId);
+    const airgap = wireCardsField('airGrid_' + nodeId);
+    const saVerSel = document.getElementById('sel_' + nodeId + '_sa_version');
+    const saVerOther = document.getElementById('sel_' + nodeId + '_sa_version_other');
+    const asVerSel = document.getElementById('sel_' + nodeId + '_as_version');
+    const asVerOther = document.getElementById('sel_' + nodeId + '_as_version_other');
+    let selectedDep = null;
+
+    saVerSel.addEventListener('change', () => {
+      saVerOther.style.display = saVerSel.value === '__other__' ? 'block' : 'none';
+      if (saVerSel.value === '__other__') saVerOther.focus();
+    });
+    asVerSel.addEventListener('change', () => {
+      asVerOther.style.display = asVerSel.value === '__other__' ? 'block' : 'none';
+      if (asVerSel.value === '__other__') asVerOther.focus();
+    });
+
+    depCards.forEach(card => {
+      card.addEventListener('click', () => {
+        selectedDep = card.getAttribute('data-dep');
+        depCards.forEach(c => c.classList.toggle('selected', c === card));
+        saFields.style.display = selectedDep === 'Standalone' ? '' : 'none';
+        asFields.style.display = selectedDep === 'Automation Suite' ? '' : 'none';
+      });
+    });
+
+    document.getElementById('go_' + nodeId).addEventListener('click', () => {
+      const errEl = document.getElementById('err_' + nodeId);
+      const showErr = (msg) => { errEl.textContent = '⚠️ ' + msg; errEl.style.display = 'block'; };
+      if (!selectedDep) { showErr('Select Standalone or Automation Suite.'); return; }
+
+      if (selectedDep === 'Standalone') {
+        let verVal = saVerSel.value;
+        if (verVal === '__other__') verVal = saVerOther.value.trim();
+        if (!verVal) { showErr('Select a target version.'); return; }
+        if (!topo.value) { showErr('Select Single-node or Multi-node/HA.'); return; }
+        errEl.style.display = 'none';
+        answers.deployType = selectedDep;
+        answers.targetVersion = verVal;
+        answers.topology = topo.value;
+        progressLog.push({ q: 'Deployment type', a: selectedDep });
+        progressLog.push({ q: 'Target version', a: verVal });
+        progressLog.push({ q: 'Topology', a: topo.value });
+        renderSidebar();
+        advance(node, 'TERM_STANDALONE_INSTALL');
+      } else {
+        let verVal = asVerSel.value;
+        if (verVal === '__other__') verVal = asVerOther.value.trim();
+        if (!plat.value) { showErr('Select a platform.'); return; }
+        if (!prof.value) { showErr('Select an input.json profile.'); return; }
+        if (!verVal) { showErr('Select a target version.'); return; }
+        if (!airgap.value) { showErr('Select air-gapped or not.'); return; }
+        errEl.style.display = 'none';
+        answers.deployType = selectedDep;
+        answers.platform = plat.value;
+        answers.profile = prof.value;
+        answers.targetVersion = verVal;
+        answers.airgap = airgap.value;
+        progressLog.push({ q: 'Deployment type', a: selectedDep });
+        progressLog.push({ q: 'Platform', a: plat.value });
+        progressLog.push({ q: 'Profile', a: prof.value });
+        progressLog.push({ q: 'Target version', a: verVal });
+        progressLog.push({ q: 'Air-gapped', a: airgap.value });
+        renderSidebar();
+        advance(node, 'TERM_AS_INSTALL');
+      }
+    });
+  } else if (node.type === 'migration-combo') {
+    const curSel = document.getElementById('sel_' + nodeId + '_current');
+    const curOther = document.getElementById('sel_' + nodeId + '_current_other');
+    const preserve = wireCardsField('preserveGrid_' + nodeId);
+    const configs = wireCardsField('configsGrid_' + nodeId);
+    const sso = wireCardsField('ssoGrid_' + nodeId);
+    const creds = wireCardsField('credsGrid_' + nodeId);
+
+    curSel.addEventListener('change', () => {
+      curOther.style.display = curSel.value === '__other__' ? 'block' : 'none';
+      if (curSel.value === '__other__') curOther.focus();
+    });
+
+    document.getElementById('go_' + nodeId).addEventListener('click', () => {
+      const errEl = document.getElementById('err_' + nodeId);
+      const showErr = (msg) => { errEl.textContent = '⚠️ ' + msg; errEl.style.display = 'block'; };
+      let curVal = curSel.value;
+      if (curVal === '__other__') curVal = curOther.value.trim();
+      if (!curVal) { showErr('Select the current Standalone version.'); return; }
+      if (!preserve.value || !configs.value || !sso.value || !creds.value) { showErr('Answer all four questions below.'); return; }
+      errEl.style.display = 'none';
+
+      answers.currentVersion = curVal;
+      answers.preserveData = preserve.value;
+      answers.customConfigs = configs.value;
+      answers.sso = sso.value;
+      answers.credsUsed = creds.value;
+
+      progressLog.push({ q: 'Current version', a: curVal });
+      progressLog.push({ q: 'Preserve data', a: preserve.value });
+      progressLog.push({ q: 'Custom configs', a: configs.value });
+      progressLog.push({ q: 'SSO in use', a: sso.value });
+      progressLog.push({ q: 'Credential stores', a: creds.value });
+      renderSidebar();
+      advance(node, node.next);
+    });
+  } else if (node.type === 'onboard-combo') {
+    const kind = wireCardsField('kindGrid_' + nodeId);
+    const storeRow = document.getElementById('storeRow_' + nodeId);
+    const store = wireCardsField('storeGrid_' + nodeId);
+    kind.onChange = (val) => {
+      storeRow.style.display = (val === 'store' || val === 'both') ? '' : 'none';
+    };
+
+    document.getElementById('go_' + nodeId).addEventListener('click', () => {
+      const errEl = document.getElementById('err_' + nodeId);
+      const showErr = (msg) => { errEl.textContent = '⚠️ ' + msg; errEl.style.display = 'block'; };
+      if (!kind.value) { showErr('Select New tenant only, Credential store only, or Both.'); return; }
+      if ((kind.value === 'store' || kind.value === 'both') && !store.value) { showErr('Select a credential store.'); return; }
+      errEl.style.display = 'none';
+
+      answers.onboardKind = kind.value;
+      if (store.value) answers.store = store.value;
+
+      progressLog.push({ q: 'Onboarding kind', a: kind.value });
+      if (store.value) progressLog.push({ q: 'Credential store', a: store.value });
+      renderSidebar();
+      advance(node, node.next);
+    });
+  } else if (node.type === 'classicmodern-combo') {
+    const curSel = document.getElementById('sel_' + nodeId + '_current');
+    const curOther = document.getElementById('sel_' + nodeId + '_current_other');
+    const count = wireCardsField('countGrid_' + nodeId);
+
+    curSel.addEventListener('change', () => {
+      curOther.style.display = curSel.value === '__other__' ? 'block' : 'none';
+      if (curSel.value === '__other__') curOther.focus();
+    });
+
+    document.getElementById('go_' + nodeId).addEventListener('click', () => {
+      const errEl = document.getElementById('err_' + nodeId);
+      const showErr = (msg) => { errEl.textContent = '⚠️ ' + msg; errEl.style.display = 'block'; };
+      let curVal = curSel.value;
+      if (curVal === '__other__') curVal = curOther.value.trim();
+      if (!curVal) { showErr('Select the current Orchestrator version.'); return; }
+      if (!count.value) { showErr('Select roughly how many classic robots are in scope.'); return; }
+      errEl.style.display = 'none';
+
+      answers.currentVersion = curVal;
+      answers.robotCount = count.value;
+
+      progressLog.push({ q: 'Current version', a: curVal });
+      progressLog.push({ q: 'Classic robot count', a: count.value });
+      renderSidebar();
+      advance(node, node.next);
+    });
   } else if (node.type === 'text') {
     document.getElementById('go_' + nodeId).addEventListener('click', () => {
       const val = document.getElementById('txt_' + nodeId).value.trim();
@@ -1031,87 +1256,18 @@ const TREE = {
     question: "What do you need help with?", shortQ: "Intent", type: 'choice', answerKey: 'intent', wide: true,
     fallbackNext: 'trouble_error',
     options: [
-      { label: "Fresh install", next: 'install_type' },
+      { label: "Fresh install", next: 'install_combo' },
       { label: "Upgrade an existing install", next: 'upgrade_combo' },
-      { label: "Migrate Standalone to Automation Cloud", next: 'migration_current' },
-      { label: "Onboard a tenant / set up a credential store", next: 'onboard_type' },
-      { label: "Migrate Classic folders to Modern folders", next: 'classicmodern_version' }
+      { label: "Migrate Standalone to Automation Cloud", next: 'migration_combo' },
+      { label: "Onboard a tenant / set up a credential store", next: 'onboard_combo' },
+      { label: "Migrate Classic folders to Modern folders", next: 'classicmodern_combo' }
     ]
   },
-  install_type: {
-    question: "Standalone (Windows/IIS) or Automation Suite (Kubernetes/OpenShift)?", shortQ: "Deployment type", type: 'choice', answerKey: 'deployType',
-    options: [ { label: "Standalone", next: 'install_standalone_version' }, { label: "Automation Suite", next: 'install_as_platform' } ]
-  },
-  install_standalone_version: { question: "Target version?", shortQ: "Target version", type: 'select', answerKey: 'targetVersion', next: 'install_standalone_topology' },
-  install_standalone_topology: {
-    question: "Single-node or multi-node/HA?", shortQ: "Topology", type: 'choice', answerKey: 'topology',
-    options: [ { label: "Single-node", next: 'TERM_STANDALONE_INSTALL' }, { label: "Multi-node / HA", next: 'TERM_STANDALONE_INSTALL' } ]
-  },
-  install_as_platform: {
-    question: "Which platform? (AKS/EKS/OpenShift/on-prem K8s use the uipathctl + input.json path; GCP is a separate self-managed RKE2 installer \u2014 see the note at the top of the checklist)", shortQ: "Platform", type: 'choice', answerKey: 'platform', wide: true,
-    options: [
-      { label: "AKS (Azure)", next: 'install_as_profile' }, { label: "EKS (AWS)", next: 'install_as_profile' },
-      { label: "OpenShift", next: 'install_as_profile' }, { label: "On-prem / existing Kubernetes", next: 'install_as_profile' },
-      { label: "GCP (self-managed Linux/RKE2 installer)", next: 'install_as_profile' }
-    ]
-  },
-  install_as_profile: {
-    question: "input.json profile? (\"ha\" is the only value confirmed in UiPath's own AKS/EKS samples \u2014 pick Other if you're not sure)", shortQ: "Profile", type: 'choice', answerKey: 'profile', wide: true,
-    options: [
-      { label: "ha (production, high availability)", next: 'install_as_version' },
-      { label: "Other / not sure \u2014 verify against input.json", next: 'install_as_version' }
-    ]
-  },
-  install_as_version: { question: "Target Automation Suite version?", shortQ: "Target version", type: 'select', answerKey: 'targetVersion', next: 'install_as_airgap' },
-  install_as_airgap: {
-    question: "Air-gapped (no outbound internet)?", shortQ: "Air-gapped", type: 'choice', answerKey: 'airgap',
-    options: [ { label: "Yes, air-gapped", next: 'TERM_AS_INSTALL' }, { label: "No, has internet access", next: 'TERM_AS_INSTALL' } ]
-  },
+  install_combo: { question: "Install details", shortQ: "Install details", type: 'install-combo' },
   upgrade_combo: { question: "Upgrade details", shortQ: "Upgrade details", type: 'upgrade-combo' },
-  migration_current: { question: "Current Standalone version?", shortQ: "Current version", type: 'select', answerKey: 'currentVersion', next: 'migration_data' },
-  migration_data: {
-    question: "Do you need to preserve historical job/queue data?", shortQ: "Preserve data", type: 'choice', answerKey: 'preserveData',
-    options: [ { label: "Yes", next: 'migration_configs' }, { label: "No", next: 'migration_configs' } ]
-  },
-  migration_configs: {
-    question: "Custom Orchestrator configurations in use?", shortQ: "Custom configs", type: 'choice', answerKey: 'customConfigs',
-    options: [ { label: "Yes", next: 'migration_sso' }, { label: "No", next: 'migration_sso' } ]
-  },
-  migration_sso: {
-    question: "Using Standalone Identity / SSO (AD, SAML)?", shortQ: "SSO in use", type: 'choice', answerKey: 'sso',
-    options: [ { label: "Yes", next: 'migration_creds' }, { label: "No", next: 'migration_creds' } ]
-  },
-  migration_creds: {
-    question: "Using credential stores (CyberArk, Azure Key Vault, etc.)?", shortQ: "Credential stores", type: 'choice', answerKey: 'credsUsed',
-    options: [ { label: "Yes", next: 'TERM_MIGRATION' }, { label: "No", next: 'TERM_MIGRATION' } ]
-  },
-  onboard_type: {
-    question: "New tenant onboarding, credential store setup, or both?", shortQ: "Onboarding kind", type: 'choice', answerKey: 'onboardKind', wide: true,
-    fallbackNext: 'onboard_store',
-    options: [
-      { label: "New tenant only", value: 'tenant', next: 'TERM_ONBOARD' },
-      { label: "Credential store only", value: 'store', next: 'onboard_store' },
-      { label: "Both", value: 'both', next: 'onboard_store' }
-    ]
-  },
-  onboard_store: {
-    question: "Which credential store?", shortQ: "Credential store", type: 'choice', answerKey: 'store', wide: true,
-    options: [
-      { label: "Azure Key Vault", next: 'TERM_ONBOARD' }, { label: "CyberArk CCP", next: 'TERM_ONBOARD' },
-      { label: "HashiCorp Vault", next: 'TERM_ONBOARD' }, { label: "BeyondTrust", next: 'TERM_ONBOARD' }
-    ]
-  },
-  classicmodern_version: {
-    question: "Current Orchestrator version?", shortQ: "Current version", type: 'select', answerKey: 'currentVersion', next: 'classicmodern_count'
-  },
-  classicmodern_count: {
-    question: "Roughly how many classic robots are in scope?", shortQ: "Classic robot count", type: 'choice', answerKey: 'robotCount', wide: true,
-    options: [
-      { label: "Under 500", next: 'TERM_CLASSICMODERN' },
-      { label: "500 – 2,000", next: 'TERM_CLASSICMODERN' },
-      { label: "Over 2,000 (wizard not recommended)", next: 'TERM_CLASSICMODERN' }
-    ]
-  },
+  migration_combo: { question: "Migration details", shortQ: "Migration details", type: 'migration-combo', next: 'TERM_MIGRATION' },
+  onboard_combo: { question: "Onboarding details", shortQ: "Onboarding details", type: 'onboard-combo', next: 'TERM_ONBOARD' },
+  classicmodern_combo: { question: "Classic \u2192 Modern migration details", shortQ: "Migration details", type: 'classicmodern-combo', next: 'TERM_CLASSICMODERN' },
   trouble_error: {
     question: "Paste the exact error message or symptom:", shortQ: "Error/symptom", type: 'text', answerKey: 'errorText',
     placeholder: "e.g. The MetadataAddress must use HTTPS", next: 'TERM_TROUBLESHOOT'
