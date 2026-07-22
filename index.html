@@ -296,7 +296,7 @@ const MD = {
 const LAST_VERIFIED = "2026-07-22";
 // LAST_UPDATED_AT is bumped whenever the page's content or design is actually edited/published —
 // distinct from LAST_VERIFIED, which only tracks the daily freshness check.
-const LAST_UPDATED_AT = "2026-07-22T03:42:00";
+const LAST_UPDATED_AT = "2026-07-22T04:39:17";
 // Distribution for this wizard is intentionally manual (no shared-drive connector) — each PSE
 // keeps their own copy of this file, refreshed whenever the owner re-shares it after a daily
 // verification pass. CANONICAL_URL is left blank on purpose; if that ever changes, fill it in
@@ -771,11 +771,15 @@ function showNode(nodeId) {
   } else if (node.type === 'select') {
     let selOpts = {};
     if (nodeId === 'classicmodern_version') selOpts = { maxVersion: '2023.4' };
-    else if ((nodeId === 'upgrade_standalone_target' || nodeId === 'upgrade_as_target') && answers.currentVersion) selOpts = { minVersion: answers.currentVersion };
     if (node.answerKey === 'currentVersion') selOpts.includeOlder = true;
     controls = '<div class="field-row">' + versionSelectHtml('sel_' + nodeId, selOpts) + '<button class="go-btn" id="go_' + nodeId + '">Continue →</button></div><div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
   } else if (node.type === 'text') {
     controls = '<div class="field-row"><textarea id="txt_' + nodeId + '" placeholder="' + (node.placeholder || '') + '"></textarea><button class="go-btn" id="go_' + nodeId + '">Search →</button></div>';
+  } else if (node.type === 'version-pair') {
+    controls = '<div class="field-row"><div class="other-row-label">Current version</div>' + versionSelectHtml('sel_' + nodeId + '_current', { includeOlder: true }) + '</div>' +
+      '<div class="field-row"><div class="other-row-label">Target version</div>' + versionSelectHtml('sel_' + nodeId + '_target', {}) + '</div>' +
+      '<button class="go-btn" id="go_' + nodeId + '">Continue →</button>' +
+      '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
   }
 
   mainInner.innerHTML = '<div class="question-card"><div class="kicker"><span class="kicker-left"><span class="step-num">' + steps.length + '</span><span class="step-text">Step ' + steps.length + '</span></span>' + backLinkHtml() + '</div><h2>' + node.question + '</h2>' + controls + '</div>';
@@ -829,6 +833,54 @@ function showNode(nodeId) {
       if (errEl) errEl.style.display = 'none';
       answers[node.answerKey] = val;
       progressLog.push({ q: node.shortQ || node.question, a: val });
+      renderSidebar();
+      advance(node, node.next);
+    });
+  } else if (node.type === 'version-pair') {
+    const curSel = document.getElementById('sel_' + nodeId + '_current');
+    const curOther = document.getElementById('sel_' + nodeId + '_current_other');
+    const tgtSel = document.getElementById('sel_' + nodeId + '_target');
+    const tgtOther = document.getElementById('sel_' + nodeId + '_target_other');
+
+    function filterTargetOptions() {
+      const curVal = curSel.value === '__other__' ? '' : curSel.value;
+      const curIdx = ALL_VERSIONS.indexOf(curVal);
+      Array.from(tgtSel.options).forEach(o => {
+        if (o.value === '' || o.value === '__other__') { o.disabled = false; o.hidden = false; return; }
+        const idx = ALL_VERSIONS.indexOf(o.value);
+        const stale = curIdx !== -1 && idx !== -1 && idx <= curIdx;
+        o.disabled = stale; o.hidden = stale;
+      });
+      if (tgtSel.selectedOptions[0] && tgtSel.selectedOptions[0].disabled) tgtSel.value = '';
+    }
+
+    curSel.addEventListener('change', () => {
+      curOther.style.display = curSel.value === '__other__' ? 'block' : 'none';
+      if (curSel.value === '__other__') curOther.focus();
+      filterTargetOptions();
+    });
+    tgtSel.addEventListener('change', () => {
+      tgtOther.style.display = tgtSel.value === '__other__' ? 'block' : 'none';
+      if (tgtSel.value === '__other__') tgtOther.focus();
+    });
+
+    document.getElementById('go_' + nodeId).addEventListener('click', () => {
+      let curVal = curSel.value;
+      if (curVal === '__other__') { curVal = curOther.value.trim(); }
+      let tgtVal = tgtSel.value;
+      if (tgtVal === '__other__') { tgtVal = tgtOther.value.trim(); }
+      if (!curVal || !tgtVal) return;
+      const errEl = document.getElementById('err_' + nodeId);
+      const errMsg = versionOrderIssue(curVal, tgtVal);
+      if (errMsg) {
+        if (errEl) { errEl.textContent = '⚠️ ' + errMsg; errEl.style.display = 'block'; }
+        return;
+      }
+      if (errEl) errEl.style.display = 'none';
+      answers.currentVersion = curVal;
+      answers.targetVersion = tgtVal;
+      progressLog.push({ q: 'Current version', a: curVal });
+      progressLog.push({ q: 'Target version', a: tgtVal });
       renderSidebar();
       advance(node, node.next);
     });
@@ -920,12 +972,10 @@ const TREE = {
   },
   upgrade_type: {
     question: "Standalone or Automation Suite?", shortQ: "Deployment type", type: 'choice', answerKey: 'deployType',
-    options: [ { label: "Standalone", next: 'upgrade_standalone_current' }, { label: "Automation Suite", next: 'upgrade_as_current' } ]
+    options: [ { label: "Standalone", next: 'upgrade_standalone_versions' }, { label: "Automation Suite", next: 'upgrade_as_versions' } ]
   },
-  upgrade_as_current: { question: "Current Automation Suite version (exact)?", shortQ: "Current version", type: 'select', answerKey: 'currentVersion', next: 'upgrade_as_target' },
-  upgrade_as_target: { question: "Target Automation Suite version?", shortQ: "Target version", type: 'select', answerKey: 'targetVersion', next: 'TERM_AS_UPGRADE', validate: (val, a) => versionOrderIssue(a.currentVersion, val) },
-  upgrade_standalone_current: { question: "Current version (exact)?", shortQ: "Current version", type: 'select', answerKey: 'currentVersion', next: 'upgrade_standalone_target' },
-  upgrade_standalone_target: { question: "Target version?", shortQ: "Target version", type: 'select', answerKey: 'targetVersion', next: 'upgrade_standalone_mode', validate: (val, a) => versionOrderIssue(a.currentVersion, val) },
+  upgrade_as_versions: { question: "Current and target Automation Suite version?", shortQ: "Version", type: 'version-pair', next: 'TERM_AS_UPGRADE' },
+  upgrade_standalone_versions: { question: "Current and target version?", shortQ: "Version", type: 'version-pair', next: 'upgrade_standalone_mode' },
   upgrade_standalone_mode: {
     question: "In-place (same server) or side-by-side (new server)?", shortQ: "Upgrade mode", type: 'choice', answerKey: 'mode',
     options: [ { label: "In-place", next: 'TERM_STANDALONE_UPGRADE' }, { label: "Side-by-side", next: 'TERM_STANDALONE_UPGRADE' } ]
