@@ -141,6 +141,9 @@
   .opt-card:hover .ic-badge { background: linear-gradient(135deg, var(--orange), #ff8a5c); }
   .opt-card:hover .ic-badge svg { stroke: #ffffff; }
   .opt-card:hover .arrow { opacity: 1; transform: translateX(0); }
+  .opt-card.selected { border-color: var(--orange); background: #fff6f2; color: var(--orange); box-shadow: 0 6px 16px rgba(250,70,22,0.15); }
+  .opt-card.selected .ic-badge { background: linear-gradient(135deg, var(--orange), #ff8a5c); }
+  .opt-card.selected .ic-badge svg { stroke: #ffffff; }
   .field-row input[type=text] {
     width: 100%; padding: 11px 13px; border-radius: 9px; border: 1.5px solid var(--border); font-size: 14px; font-family: inherit; background: #fafbfc;
   }
@@ -174,6 +177,7 @@
   .result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .result-header .ic { font-size: 26px; }
   .result-header h2 { font-size: 20px; margin: 0; color: var(--navy); }
+  .result-header .back-link.result-back { margin-left: auto; flex-shrink: 0; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
   .chip {
@@ -296,7 +300,7 @@ const MD = {
 const LAST_VERIFIED = "2026-07-22";
 // LAST_UPDATED_AT is bumped whenever the page's content or design is actually edited/published —
 // distinct from LAST_VERIFIED, which only tracks the daily freshness check.
-const LAST_UPDATED_AT = "2026-07-22T04:39:17";
+const LAST_UPDATED_AT = "2026-07-22T08:51:01";
 // Distribution for this wizard is intentionally manual (no shared-drive connector) — each PSE
 // keeps their own copy of this file, refreshed whenever the owner re-shares it after a daily
 // verification pass. CANONICAL_URL is left blank on purpose; if that ever changes, fill it in
@@ -756,6 +760,12 @@ function showNode(nodeId) {
     mainInner.innerHTML = node.render(answers);
     const resultEl = mainInner.querySelector('.result-card');
     wireActionBar(resultEl);
+    const resultHeader = resultEl && resultEl.querySelector('.result-header');
+    if (resultHeader && steps.length > 1) {
+      resultHeader.insertAdjacentHTML('beforeend', '<button class="back-link result-back" id="backBtn">&larr; back</button>');
+      const rb = document.getElementById('backBtn');
+      if (rb) rb.addEventListener('click', goBack);
+    }
     renderSidebar();
     return;
   }
@@ -778,6 +788,21 @@ function showNode(nodeId) {
   } else if (node.type === 'version-pair') {
     controls = '<div class="field-row"><div class="other-row-label">Current version</div>' + versionSelectHtml('sel_' + nodeId + '_current', { includeOlder: true }) + '</div>' +
       '<div class="field-row"><div class="other-row-label">Target version</div>' + versionSelectHtml('sel_' + nodeId + '_target', {}) + '</div>' +
+      '<button class="go-btn" id="go_' + nodeId + '">Continue →</button>' +
+      '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
+  } else if (node.type === 'upgrade-combo') {
+    controls = '<div class="field-row"><div class="other-row-label">Deployment type</div>' +
+      '<div class="opt-grid" id="depGrid_' + nodeId + '">' +
+        '<div class="opt-card" data-dep="Standalone"><span class="ic-badge">' + iconForLabel('Standalone') + '</span><span class="opt-label">Standalone</span></div>' +
+        '<div class="opt-card" data-dep="Automation Suite"><span class="ic-badge">' + iconForLabel('Automation Suite') + '</span><span class="opt-label">Automation Suite</span></div>' +
+      '</div></div>' +
+      '<div class="field-row"><div class="other-row-label">Current version</div>' + versionSelectHtml('sel_' + nodeId + '_current', { includeOlder: true }) + '</div>' +
+      '<div class="field-row"><div class="other-row-label">Target version</div>' + versionSelectHtml('sel_' + nodeId + '_target', {}) + '</div>' +
+      '<div class="field-row" id="modeRow_' + nodeId + '" style="display:none;"><div class="other-row-label">Upgrade mode (Standalone only)</div>' +
+        '<div class="opt-grid" id="modeGrid_' + nodeId + '">' +
+          '<div class="opt-card" data-mode="In-place"><span class="ic-badge">' + iconForLabel('In-place') + '</span><span class="opt-label">In-place</span></div>' +
+          '<div class="opt-card" data-mode="Side-by-side"><span class="ic-badge">' + iconForLabel('Side-by-side') + '</span><span class="opt-label">Side-by-side</span></div>' +
+        '</div></div>' +
       '<button class="go-btn" id="go_' + nodeId + '">Continue →</button>' +
       '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
   }
@@ -884,6 +909,78 @@ function showNode(nodeId) {
       renderSidebar();
       advance(node, node.next);
     });
+  } else if (node.type === 'upgrade-combo') {
+    const depCards = Array.from(mainInner.querySelectorAll('#depGrid_' + nodeId + ' .opt-card'));
+    const modeRow = document.getElementById('modeRow_' + nodeId);
+    const modeCards = Array.from(mainInner.querySelectorAll('#modeGrid_' + nodeId + ' .opt-card'));
+    const curSel = document.getElementById('sel_' + nodeId + '_current');
+    const curOther = document.getElementById('sel_' + nodeId + '_current_other');
+    const tgtSel = document.getElementById('sel_' + nodeId + '_target');
+    const tgtOther = document.getElementById('sel_' + nodeId + '_target_other');
+    let selectedDep = null, selectedMode = null;
+
+    function filterTargetOptions() {
+      const curVal = curSel.value === '__other__' ? '' : curSel.value;
+      const curIdx = ALL_VERSIONS.indexOf(curVal);
+      Array.from(tgtSel.options).forEach(o => {
+        if (o.value === '' || o.value === '__other__') { o.disabled = false; o.hidden = false; return; }
+        const idx = ALL_VERSIONS.indexOf(o.value);
+        const stale = curIdx !== -1 && idx !== -1 && idx <= curIdx;
+        o.disabled = stale; o.hidden = stale;
+      });
+      if (tgtSel.selectedOptions[0] && tgtSel.selectedOptions[0].disabled) tgtSel.value = '';
+    }
+
+    depCards.forEach(card => {
+      card.addEventListener('click', () => {
+        selectedDep = card.getAttribute('data-dep');
+        depCards.forEach(c => c.classList.toggle('selected', c === card));
+        modeRow.style.display = selectedDep === 'Standalone' ? '' : 'none';
+      });
+    });
+    modeCards.forEach(card => {
+      card.addEventListener('click', () => {
+        selectedMode = card.getAttribute('data-mode');
+        modeCards.forEach(c => c.classList.toggle('selected', c === card));
+      });
+    });
+    curSel.addEventListener('change', () => {
+      curOther.style.display = curSel.value === '__other__' ? 'block' : 'none';
+      if (curSel.value === '__other__') curOther.focus();
+      filterTargetOptions();
+    });
+    tgtSel.addEventListener('change', () => {
+      tgtOther.style.display = tgtSel.value === '__other__' ? 'block' : 'none';
+      if (tgtSel.value === '__other__') tgtOther.focus();
+    });
+
+    document.getElementById('go_' + nodeId).addEventListener('click', () => {
+      const errEl = document.getElementById('err_' + nodeId);
+      const showErr = (msg) => { errEl.textContent = '⚠️ ' + msg; errEl.style.display = 'block'; };
+      if (!selectedDep) { showErr('Select Standalone or Automation Suite.'); return; }
+      let curVal = curSel.value;
+      if (curVal === '__other__') curVal = curOther.value.trim();
+      let tgtVal = tgtSel.value;
+      if (tgtVal === '__other__') tgtVal = tgtOther.value.trim();
+      if (!curVal || !tgtVal) { showErr('Select both a current and target version.'); return; }
+      const verErr = versionOrderIssue(curVal, tgtVal);
+      if (verErr) { showErr(verErr); return; }
+      if (selectedDep === 'Standalone' && !selectedMode) { showErr('Select In-place or Side-by-side.'); return; }
+      errEl.style.display = 'none';
+
+      answers.deployType = selectedDep;
+      answers.currentVersion = curVal;
+      answers.targetVersion = tgtVal;
+      if (selectedDep === 'Standalone') answers.mode = selectedMode;
+
+      progressLog.push({ q: 'Deployment type', a: selectedDep });
+      progressLog.push({ q: 'Current version', a: curVal });
+      progressLog.push({ q: 'Target version', a: tgtVal });
+      if (selectedDep === 'Standalone') progressLog.push({ q: 'Upgrade mode', a: selectedMode });
+      renderSidebar();
+
+      advance(node, selectedDep === 'Standalone' ? 'TERM_STANDALONE_UPGRADE' : 'TERM_AS_UPGRADE');
+    });
   } else if (node.type === 'text') {
     document.getElementById('go_' + nodeId).addEventListener('click', () => {
       const val = document.getElementById('txt_' + nodeId).value.trim();
@@ -935,7 +1032,7 @@ const TREE = {
     fallbackNext: 'trouble_error',
     options: [
       { label: "Fresh install", next: 'install_type' },
-      { label: "Upgrade an existing install", next: 'upgrade_type' },
+      { label: "Upgrade an existing install", next: 'upgrade_combo' },
       { label: "Migrate Standalone to Automation Cloud", next: 'migration_current' },
       { label: "Onboard a tenant / set up a credential store", next: 'onboard_type' },
       { label: "Migrate Classic folders to Modern folders", next: 'classicmodern_version' }
@@ -970,16 +1067,7 @@ const TREE = {
     question: "Air-gapped (no outbound internet)?", shortQ: "Air-gapped", type: 'choice', answerKey: 'airgap',
     options: [ { label: "Yes, air-gapped", next: 'TERM_AS_INSTALL' }, { label: "No, has internet access", next: 'TERM_AS_INSTALL' } ]
   },
-  upgrade_type: {
-    question: "Standalone or Automation Suite?", shortQ: "Deployment type", type: 'choice', answerKey: 'deployType',
-    options: [ { label: "Standalone", next: 'upgrade_standalone_versions' }, { label: "Automation Suite", next: 'upgrade_as_versions' } ]
-  },
-  upgrade_as_versions: { question: "Current and target Automation Suite version?", shortQ: "Version", type: 'version-pair', next: 'TERM_AS_UPGRADE' },
-  upgrade_standalone_versions: { question: "Current and target version?", shortQ: "Version", type: 'version-pair', next: 'upgrade_standalone_mode' },
-  upgrade_standalone_mode: {
-    question: "In-place (same server) or side-by-side (new server)?", shortQ: "Upgrade mode", type: 'choice', answerKey: 'mode',
-    options: [ { label: "In-place", next: 'TERM_STANDALONE_UPGRADE' }, { label: "Side-by-side", next: 'TERM_STANDALONE_UPGRADE' } ]
-  },
+  upgrade_combo: { question: "Upgrade details", shortQ: "Upgrade details", type: 'upgrade-combo' },
   migration_current: { question: "Current Standalone version?", shortQ: "Current version", type: 'select', answerKey: 'currentVersion', next: 'migration_data' },
   migration_data: {
     question: "Do you need to preserve historical job/queue data?", shortQ: "Preserve data", type: 'choice', answerKey: 'preserveData',
