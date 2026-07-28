@@ -300,7 +300,7 @@ const MD = {
 const LAST_VERIFIED = "2026-07-28";
 // LAST_UPDATED_AT is bumped every time the daily freshness-check task runs (whether or not it made
 // content changes), same as LAST_VERIFIED — per the scheduled task's explicit Step 5 instruction.
-const LAST_UPDATED_AT = "2026-07-28T09:12:28";
+const LAST_UPDATED_AT = "2026-07-28T09:29:05";
 // Distribution for this wizard is intentionally manual (no shared-drive connector) — each PSE
 // keeps their own copy of this file, refreshed whenever the owner re-shares it after a daily
 // verification pass. CANONICAL_URL is left blank on purpose; if that ever changes, fill it in
@@ -745,10 +745,10 @@ function classicFolderUpgradeWarning(currentVersion, targetVersion) {
   if (currentIdx === -1) {
     // Current version wasn't recognized/selected (e.g. "Other") — we can't rule this out, so warn
     // but phrase it as a check rather than an assertion.
-    return 'Target is <strong>' + targetVersion + '</strong> &mdash; if your <em>current</em> version predates 2023.10, note that Orchestrator 2023.10+ blocks setup outright if any Classic folders/robots remain in the database. Confirm none remain (migrated to Modern folders, classic folders deleted) before upgrading. If your current version is already 2023.10 or later, this does not apply — Classic folders cannot exist there.';
+    return 'Target is <strong>' + targetVersion + '</strong> &mdash; if your <em>current</em> version predates 2023.10, note that Orchestrator 2023.10+ blocks setup outright if any Classic folders/robots remain in the database. Confirm none remain (migrated to Modern folders, classic folders deleted) before upgrading. If your current version is already 2023.10 or later, this does not apply — Classic folders cannot exist there. <em>(Confirmed: this block starts at 2023.10 specifically &mdash; not an earlier patch like 2023.4.4.)</em>';
   }
 
-  return 'Current version is <strong>' + currentVersion + '</strong> (predates 2023.10) and target is <strong>' + targetVersion + '</strong> &mdash; Orchestrator 2023.10+ blocks setup outright if any Classic folders/robots remain in the database. Confirm they have been migrated to Modern folders (and the classic folders deleted) <strong>before</strong> running this upgrade. If not done yet, run the Classic&rarr;Modern migration path first.';
+  return 'Current version is <strong>' + currentVersion + '</strong> (predates 2023.10) and target is <strong>' + targetVersion + '</strong> &mdash; Orchestrator 2023.10+ blocks setup outright if any Classic folders/robots remain in the database. Confirm they have been migrated to Modern folders (and the classic folders deleted) <strong>before</strong> running this upgrade. If not done yet, run the Classic&rarr;Modern migration path first. <em>(Confirmed against official docs: this block starts at 2023.10 specifically &mdash; not an earlier patch like 2023.4.4, which is unrelated to Classic folders.)</em>';
 }
 
 function backLinkHtml() {
