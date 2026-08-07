@@ -297,10 +297,10 @@ const MD = {
 // ---------- Freshness / update-check config ----------
 // LAST_VERIFIED is bumped by the daily freshness-check task every time it runs (whether or not
 // content changed) so anyone opening this file can see how current it is at a glance.
-const LAST_VERIFIED = "2026-08-06";
+const LAST_VERIFIED = "2026-08-07";
 // LAST_UPDATED_AT is bumped every time the daily freshness-check task runs (whether or not it made
 // content changes), same as LAST_VERIFIED — per the scheduled task's explicit Step 5 instruction.
-const LAST_UPDATED_AT = "2026-08-06T13:30:49";
+const LAST_UPDATED_AT = "2026-08-07T01:25:36";
 // Distribution for this wizard is intentionally manual (no shared-drive connector) — each PSE
 // keeps their own copy of this file, refreshed whenever the owner re-shares it after a daily
 // verification pass. CANONICAL_URL is left blank on purpose; if that ever changes, fill it in
@@ -938,8 +938,9 @@ function showNode(nodeId) {
           '<div class="opt-card" data-mode="In-place"><span class="ic-badge">' + iconForLabel('In-place') + '</span><span class="opt-label">In-place</span></div>' +
           '<div class="opt-card" data-mode="Side-by-side"><span class="ic-badge">' + iconForLabel('Side-by-side') + '</span><span class="opt-label">Side-by-side</span></div>' +
         '</div></div>' +
-      '<button class="go-btn" id="go_' + nodeId + '">Continue →</button>' +
-      '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>';
+      '<button class="go-btn" id="go_' + nodeId + '">Compute upgrade path →</button>' +
+      '<div class="field-error" id="err_' + nodeId + '" style="display:none;"></div>' +
+      '<div id="resultArea_' + nodeId + '" style="margin-top:22px;"></div>';
   } else if (node.type === 'install-combo') {
     controls = '<div class="field-row"><div class="other-row-label">Deployment type</div>' +
       '<div class="opt-grid" id="depGrid_' + nodeId + '">' +
@@ -1168,13 +1169,31 @@ function showNode(nodeId) {
       answers.targetVersion = tgtVal;
       answers.mode = selectedMode;
 
-      progressLog.push({ q: 'Deployment type', a: selectedDep });
-      progressLog.push({ q: 'Current version', a: curVal });
-      progressLog.push({ q: 'Target version', a: tgtVal });
-      progressLog.push({ q: 'Upgrade mode', a: selectedMode });
-      renderSidebar();
+      // Render the result inline on this same page — no navigation to a separate
+      // screen — per the "everything on one page" request modeled on the reference
+      // Automation Suite upgrade-path tool.
+      const termId = selectedDep === 'Standalone' ? 'TERM_STANDALONE_UPGRADE' : 'TERM_AS_UPGRADE';
+      const resultArea = document.getElementById('resultArea_' + nodeId);
+      resultArea.innerHTML = TREE[termId].render(answers);
+      if (typeof resultArea.scrollIntoView === 'function') resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const resultEl = resultArea.querySelector('.result-card');
+      wireActionBar(resultEl);
 
-      advance(node, selectedDep === 'Standalone' ? 'TERM_STANDALONE_UPGRADE' : 'TERM_AS_UPGRADE');
+      if (!progressLog.length || progressLog[progressLog.length - 1].q !== 'Upgrade mode') {
+        progressLog.push({ q: 'Deployment type', a: selectedDep });
+        progressLog.push({ q: 'Current version', a: curVal });
+        progressLog.push({ q: 'Target version', a: tgtVal });
+        progressLog.push({ q: 'Upgrade mode', a: selectedMode });
+      } else {
+        // Recomputed after changing an input — update the existing log entries in place
+        // rather than piling up duplicates every time "Compute" is clicked again.
+        const n = progressLog.length;
+        progressLog[n - 4] = { q: 'Deployment type', a: selectedDep };
+        progressLog[n - 3] = { q: 'Current version', a: curVal };
+        progressLog[n - 2] = { q: 'Target version', a: tgtVal };
+        progressLog[n - 1] = { q: 'Upgrade mode', a: selectedMode };
+      }
+      renderSidebar();
     });
   } else if (node.type === 'install-combo') {
     const depCards = Array.from(mainInner.querySelectorAll('#depGrid_' + nodeId + ' .opt-card'));
